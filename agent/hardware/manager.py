@@ -7,6 +7,7 @@ from typing import Dict, Any, List
 from agent.hardware.base import HardwareProvider
 from agent.hardware.linux_provider import LinuxHardwareProvider
 from agent.hardware.windows_provider import WindowsHardwareProvider
+from agent.hardware.macos_provider import MacOSHardwareProvider
 from agent.hardware.simulated_provider import SimulatedHardwareProvider, SIMULATED_PRESETS
 from agent.models import SystemHardwareSnapshot
 
@@ -15,6 +16,8 @@ def get_native_provider() -> HardwareProvider:
     sys_name = platform.system().lower()
     if sys_name == "windows":
         return WindowsHardwareProvider()
+    elif sys_name == "darwin":
+        return MacOSHardwareProvider()
     else:
         # Linux and default fallback
         return LinuxHardwareProvider()

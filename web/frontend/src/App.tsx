@@ -1,14 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Header } from './components/Header';
+import { DownloadPortal } from './components/DownloadPortal';
 import { HardwareSpecsCard } from './components/HardwareSpecsCard';
-import { HardwareScanBanner } from './components/HardwareScanBanner';
-import { DiagnosticTestController } from './components/DiagnosticTestController';
 import { WorkloadSelector } from './components/WorkloadSelector';
 import { ManualInspectionSection } from './components/ManualInspectionModal';
 import { ReportViewer } from './components/ReportViewer';
 import type { SystemHardwareSnapshot, DiagnosticReport } from './types';
-import { MOCK_SIMULATION_PRESETS_LIST, MOCK_HARDWARE_PRESETS, createMockReport } from './mockData';
-import { detectBrowserHardware } from './utils/browserHardware';
+import { createMockReport } from './mockData';
 
 export function App() {
   // Theme Management (Light / Dark with localStorage persistence)
@@ -27,30 +25,26 @@ export function App() {
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  const [activeTab, setActiveTab] = useState('diagnostics');
-  const [isSimulation, setIsSimulation] = useState(false);
-  const [simulationPreset, setSimulationPreset] = useState('mid_range');
-  const [simulationPresetsList, setSimulationPresetsList] = useState(MOCK_SIMULATION_PRESETS_LIST);
+  // Active Tab: Defaults to 'downloads' (Official Portal & Setup Hub)
+  const [activeTab, setActiveTab] = useState<'downloads' | 'viewer' | 'workloads' | 'manual'>('downloads');
 
+  // Hardware State: NULL by default. NO hardcoded specs on initial visit!
   const [hardware, setHardware] = useState<SystemHardwareSnapshot | null>(null);
-  const [importedHardware, setImportedHardware] = useState<SystemHardwareSnapshot | null>(null);
-  const [loadingHardware, setLoadingHardware] = useState(true);
-  const [isCloudDemo, setIsCloudDemo] = useState(false);
-
-  // Test Run State
-  const [testLevel, setTestLevel] = useState('Quick / Shop Safe');
-  const [selectedWorkloads, setSelectedWorkloads] = useState<string[]>(['comp_materials_science', 'programming']);
-  const [isRunning, setIsRunning] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [currentStage, setCurrentStage] = useState('Ready');
-  const [elapsedSecs, setElapsedSecs] = useState(0);
-  const [safetyLevel, setSafetyLevel] = useState('NORMAL');
-  const [latestSample, setLatestSample] = useState<any>(null);
-
   const [latestReport, setLatestReport] = useState<DiagnosticReport | null>(null);
   const [historicalReports, setHistoricalReports] = useState<Array<{ filename: string; size_kb: number; created_at: string }>>([]);
 
-  // Check URL hash for imported 100% genuine data from scan.ps1, scan.sh or LaptopCheck_Windows.bat
+  // Workload selection
+  const [selectedWorkloads, setSelectedWorkloads] = useState<string[]>(['comp_materials_science', 'programming']);
+
+  // Helper to construct a report from genuine or uploaded hardware snapshot
+  const buildReportFromSnapshot = (snap: SystemHardwareSnapshot) => {
+    setHardware(snap);
+    const report = createMockReport('mid_range', 'Quick / Shop Safe', snap);
+    setLatestReport(report);
+    setActiveTab('viewer');
+  };
+
+  // Check URL hash for imported 100% genuine data from scan.ps1, scan.sh, or scan_macos.sh
   useEffect(() => {
     const checkHash = () => {
       if (window.location.hash.startsWith('#data=')) {
@@ -64,11 +58,7 @@ export function App() {
           }
           const parsed = JSON.parse(jsonStr) as SystemHardwareSnapshot;
           if (parsed && (parsed.device_model || parsed.cpu)) {
-            setImportedHardware(parsed);
-            setHardware(parsed);
-            setIsSimulation(false);
-            setIsCloudDemo(false);
-            setLoadingHardware(false);
+            buildReportFromSnapshot(parsed);
           }
         } catch (e) {
           console.warn('Failed to parse URL hash hardware data:', e);
@@ -81,73 +71,7 @@ export function App() {
     return () => window.removeEventListener('hashchange', checkHash);
   }, []);
 
-  // Fetch simulation presets list from API if available
-  useEffect(() => {
-    fetch('/api/simulation/presets')
-      .then(res => {
-        if (!res.ok) throw new Error('API server returned error');
-        return res.json();
-      })
-      .then(data => {
-        setSimulationPresetsList(data);
-      })
-      .catch(() => {});
-  }, []);
-
-  // Fetch hardware snapshot from API or probe real host browser hardware
-  const loadHardware = async () => {
-    if (importedHardware && !isSimulation) {
-      setHardware(importedHardware);
-      setLoadingHardware(false);
-      return;
-    }
-
-    setLoadingHardware(true);
-
-    if (isSimulation) {
-      try {
-        const res = await fetch(`/api/hardware?simulate=true&preset=${simulationPreset}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        setHardware(data);
-        setIsCloudDemo(false);
-      } catch {
-        const fallbackHw = MOCK_HARDWARE_PRESETS[simulationPreset] || MOCK_HARDWARE_PRESETS.mid_range;
-        setHardware(fallbackHw);
-        setIsCloudDemo(true);
-      } finally {
-        setLoadingHardware(false);
-      }
-      return;
-    }
-
-    // LIVE HARDWARE MODE (Detect on this machine!)
-    try {
-      const res = await fetch('/api/hardware?simulate=false');
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setHardware(data);
-      setIsCloudDemo(false);
-    } catch {
-      // Local agent server not running on this laptop -> Extract genuine hardware via Browser WebAPI & WebGL!
-      try {
-        const browserHw = await detectBrowserHardware();
-        setHardware(browserHw);
-      } catch (err) {
-        console.error('Browser hardware detection error:', err);
-        setHardware(MOCK_HARDWARE_PRESETS.mid_range);
-      }
-      setIsCloudDemo(true);
-    } finally {
-      setLoadingHardware(false);
-    }
-  };
-
-  useEffect(() => {
-    loadHardware();
-  }, [isSimulation, simulationPreset, importedHardware]);
-
-  // Fetch reports list
+  // Fetch reports list if backend server is available
   const loadReports = () => {
     fetch('/api/reports')
       .then(res => {
@@ -156,11 +80,8 @@ export function App() {
       })
       .then(data => setHistoricalReports(data))
       .catch(() => {
-        setHistoricalReports([
-          { filename: 'LaptopCheck_ThinkPad_E14_Gen_4_Sample.pdf', size_kb: 56.9, created_at: '2026-09-27 19:42:32' },
-          { filename: 'LaptopCheck_Precision_7770_Sample.pdf', size_kb: 64.2, created_at: '2026-09-27 18:41:06' },
-          { filename: 'LaptopCheck_EcoBook_14_Sample.pdf', size_kb: 54.4, created_at: '2026-09-27 18:48:05' }
-        ]);
+        // Local API not running (static or serverless mode)
+        setHistoricalReports([]);
       });
   };
 
@@ -168,182 +89,87 @@ export function App() {
     loadReports();
   }, []);
 
-  // Polling during active test if connected to backend
-  useEffect(() => {
-    let interval: any = null;
-    if (isRunning && !isCloudDemo) {
-      interval = setInterval(() => {
-        fetch('/api/test-runs/active')
-          .then(res => res.json())
-          .then(data => {
-            setProgress(data.progress || 0);
-            setCurrentStage(data.current_stage || 'Testing...');
-            setElapsedSecs(data.elapsed_secs || 0);
-            setSafetyLevel(data.safety_level || 'NORMAL');
-            if (data.latest_sample) {
-              setLatestSample(data.latest_sample);
-            }
-
-            if (!data.is_running && data.progress >= 1.0) {
-              setIsRunning(false);
-              if (data.latest_report) {
-                setLatestReport(data.latest_report);
-                setActiveTab('reports');
-              }
-              loadReports();
-            }
-          })
-          .catch(() => {});
-      }, 700);
+  const handleClearReport = () => {
+    setHardware(null);
+    setLatestReport(null);
+    if (window.location.hash.startsWith('#data=')) {
+      history.replaceState(null, document.title, window.location.pathname + window.location.search);
     }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isRunning, isCloudDemo]);
-
-  // Client-side simulation runner for Vercel Cloud Demo
-  const runCloudDemoTest = () => {
-    setIsRunning(true);
-    setProgress(0.05);
-    setCurrentStage('Initializing diagnostic sequence on host device...');
-    setElapsedSecs(0);
-
-    const stages = [
-      { pct: 0.15, stage: 'Probing CPU multi-core burst capability...', temp: 48, freq: 2800 },
-      { pct: 0.35, stage: 'Testing sustained multi-threading & thermal stability...', temp: 64, freq: 2600 },
-      { pct: 0.55, stage: 'Measuring RAM sequential bandwidth & integrity...', temp: 68, freq: 2700 },
-      { pct: 0.72, stage: 'Benchmarking storage sequential read/write...', temp: 59, freq: 2800 },
-      { pct: 0.88, stage: 'Executing scientific BLAS DGEMM routines...', temp: 71, freq: 2500 },
-      { pct: 0.96, stage: 'Evaluating workload suitability requirements...', temp: 54, freq: 2800 },
-      { pct: 1.0, stage: 'Diagnostic complete! Building assessment report...', temp: 49, freq: 2800 }
-    ];
-
-    let currentIdx = 0;
-    const interval = setInterval(() => {
-      currentIdx += 1;
-      setElapsedSecs(prev => prev + 1);
-
-      if (currentIdx < stages.length) {
-        const item = stages[currentIdx];
-        setProgress(item.pct);
-        setCurrentStage(item.stage);
-        setLatestSample({ cpu_temp_c: item.temp, cpu_freq_mhz: item.freq });
-      } else {
-        clearInterval(interval);
-        setIsRunning(false);
-        const report = createMockReport(
-          simulationPreset,
-          testLevel,
-          !isSimulation && hardware ? hardware : undefined
-        );
-        setLatestReport(report);
-        setActiveTab('reports');
-      }
-    }, 1200);
-  };
-
-  // Start test handler
-  const handleStartTest = () => {
-    if (isCloudDemo) {
-      runCloudDemoTest();
-      return;
-    }
-
-    fetch('/api/test-runs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        test_level: testLevel,
-        workload_ids: selectedWorkloads,
-        simulate: isSimulation,
-        simulation_preset: simulationPreset
-      })
-    })
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
-      .then(() => {
-        setIsRunning(true);
-        setProgress(0.02);
-        setCurrentStage('Initializing diagnostic engine...');
-      })
-      .catch(() => {
-        runCloudDemoTest();
-      });
-  };
-
-  // Stop test handler
-  const handleStopTest = () => {
-    if (isCloudDemo) {
-      setIsRunning(false);
-      setCurrentStage('Test aborted by user');
-      return;
-    }
-
-    fetch('/api/test-runs/stop', { method: 'POST' })
-      .then(() => {
-        setIsRunning(false);
-        setCurrentStage('Test aborted by user');
-      })
-      .catch(() => {
-        setIsRunning(false);
-      });
-  };
-
-  const handleHardwareImport = (imported: SystemHardwareSnapshot) => {
-    setImportedHardware(imported);
-    setHardware(imported);
-    setIsSimulation(false);
-    setIsCloudDemo(false);
-    setLoadingHardware(false);
+    setActiveTab('downloads');
   };
 
   return (
-    <div style={{ minHeight: '100vh', paddingBottom: '3rem' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      
+      {/* Universal Top Navigation Header */}
       <Header
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        isSimulation={isSimulation}
-        setIsSimulation={setIsSimulation}
-        simulationPreset={simulationPreset}
-        setSimulationPreset={setSimulationPreset}
-        simulationPresetsList={simulationPresetsList}
+        setActiveTab={(tab: any) => setActiveTab(tab)}
         theme={theme}
         toggleTheme={toggleTheme}
       />
 
-      <main style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 1.5rem' }}>
-        {/* Genuine Hardware Scan & 1-Liner Action Banner */}
-        <HardwareScanBanner
-          onHardwareImported={handleHardwareImport}
-          isImported={!!importedHardware && !isSimulation}
-          machineName={hardware ? `${hardware.manufacturer} ${hardware.device_model}` : undefined}
-        />
+      {/* Main Content Area */}
+      <main style={{ flex: 1, padding: '0 1rem' }}>
+        
+        {/* TAB 1: DOWNLOADS & SETUP (Default Landing Portal) */}
+        {activeTab === 'downloads' && (
+          <DownloadPortal
+            onOpenReportViewer={() => setActiveTab('viewer')}
+            hasLoadedReport={!!hardware}
+          />
+        )}
 
-        {/* Hardware Snapshot Card */}
-        <HardwareSpecsCard hardware={hardware} loading={loadingHardware} />
-
-        {/* Tab 1: Diagnostics & Run */}
-        {activeTab === 'diagnostics' && (
-          <div>
-            <DiagnosticTestController
-              testLevel={testLevel}
-              setTestLevel={setTestLevel}
-              isRunning={isRunning}
-              progress={progress}
-              currentStage={currentStage}
-              elapsedSecs={elapsedSecs}
-              safetyLevel={safetyLevel}
-              latestSample={latestSample}
-              onStartTest={handleStartTest}
-              onStopTest={handleStopTest}
-              latestReport={latestReport}
-              onViewReport={(rep) => {
-                setLatestReport(rep);
-                setActiveTab('reports');
-              }}
+        {/* TAB 2: INSPECT REPORT / REPORT VIEWER */}
+        {activeTab === 'viewer' && (
+          <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+            <ReportViewer
+              report={latestReport}
+              historicalReports={historicalReports}
+              onRefreshReports={loadReports}
+              onLoadSnapshot={buildReportFromSnapshot}
+              onClearReport={handleClearReport}
+              onGoToDownloads={() => setActiveTab('downloads')}
             />
+
+            {/* If genuine hardware is loaded, show the detailed specs card below report */}
+            {hardware && (
+              <div style={{ marginTop: '2rem' }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '1rem',
+                  padding: '0 0.5rem'
+                }}>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                    Detailed Hardware Inventory & Provenance
+                  </h3>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--status-pass)', fontWeight: 600 }}>
+                    100% Genuine Inspected Telemetry
+                  </span>
+                </div>
+
+                <HardwareSpecsCard
+                  hardware={hardware}
+                  loading={false}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: WORKLOADS MATRIX */}
+        {activeTab === 'workloads' && (
+          <div style={{ maxWidth: '1200px', margin: '0 auto', paddingBottom: '3rem' }}>
+            <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+              <h2 style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '0.5rem' }}>
+                Workload Suitability Verification Matrix
+              </h2>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', maxWidth: '650px', margin: '0 auto' }}>
+                LaptopCheck evaluates inspected hardware against demanding scientific and engineering profiles to deliver an unbiased purchase or deployment recommendation.
+              </p>
+            </div>
 
             <WorkloadSelector
               selectedWorkloads={selectedWorkloads}
@@ -352,28 +178,46 @@ export function App() {
           </div>
         )}
 
-        {/* Tab 2: Workloads & Suitability */}
-        {activeTab === 'workloads' && (
-          <WorkloadSelector
-            selectedWorkloads={selectedWorkloads}
-            setSelectedWorkloads={setSelectedWorkloads}
-          />
-        )}
-
-        {/* Tab 3: Manual Shop Checks */}
+        {/* TAB 4: MANUAL SHOP INSPECTION CHECKLIST */}
         {activeTab === 'manual' && (
-          <ManualInspectionSection />
+          <div style={{ maxWidth: '1000px', margin: '0 auto', paddingBottom: '3rem' }}>
+            <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+              <h2 style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '0.5rem' }}>
+                Physical Shop Inspection Checklist
+              </h2>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', maxWidth: '650px', margin: '0 auto' }}>
+                Before buying a used or refurbished laptop, run through this 9-point physical inspection to detect chassis drops, hinge wear, screen defects, and port failures.
+              </p>
+            </div>
+
+            <ManualInspectionSection />
+          </div>
         )}
 
-        {/* Tab 4: PDF Reports */}
-        {activeTab === 'reports' && (
-          <ReportViewer
-            report={latestReport}
-            historicalReports={historicalReports}
-            onRefreshReports={loadReports}
-          />
-        )}
       </main>
+
+      {/* Universal Footer */}
+      <footer style={{
+        marginTop: 'auto',
+        background: 'var(--bg-header)',
+        borderTop: '1px solid var(--border-card)',
+        padding: '2rem 1.5rem',
+        textAlign: 'center',
+        fontSize: '0.82rem',
+        color: 'var(--text-muted)'
+      }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+          <div>
+            <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>LaptopCheck v1.0.0</span> — Professional Laptop Diagnostic & Workload Suitability Analyzer.
+          </div>
+          <div style={{ display: 'flex', gap: '1.25rem' }}>
+            <span style={{ color: 'var(--status-pass)', fontWeight: 600 }}>100% Non-Destructive Safe</span>
+            <span>Windows • macOS • Linux</span>
+            <span>Zero Data Risk</span>
+          </div>
+        </div>
+      </footer>
+
     </div>
   );
 }

@@ -1,14 +1,9 @@
 import React from 'react';
-import { Laptop, Cpu, ShieldCheck, FileText, CheckSquare, Sun, Moon, Download } from 'lucide-react';
+import { Laptop, Download, FileText, ShieldCheck, CheckSquare, Sun, Moon } from 'lucide-react';
 
 interface HeaderProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
-  isSimulation: boolean;
-  setIsSimulation: (sim: boolean) => void;
-  simulationPreset: string;
-  setSimulationPreset: (preset: string) => void;
-  simulationPresetsList: Array<{ id: string; label: string }>;
   theme: 'light' | 'dark';
   toggleTheme: () => void;
 }
@@ -16,11 +11,6 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   activeTab,
   setActiveTab,
-  isSimulation,
-  setIsSimulation,
-  simulationPreset,
-  setSimulationPreset,
-  simulationPresetsList,
   theme,
   toggleTheme,
 }) => {
@@ -29,7 +19,10 @@ export const Header: React.FC<HeaderProps> = ({
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
         
         {/* Brand & Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <div 
+          onClick={() => setActiveTab('downloads')}
+          style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}
+        >
           <div style={{
             background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)',
             padding: '0.65rem',
@@ -43,7 +36,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <h1 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-main)' }}>LaptopCheck</h1>
+              <h1 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.01em' }}>LaptopCheck</h1>
               <span style={{
                 background: 'var(--primary-light)',
                 color: 'var(--primary)',
@@ -55,7 +48,7 @@ export const Header: React.FC<HeaderProps> = ({
               }}>v1.0.0</span>
             </div>
             <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              Hardware Diagnostic & Workload Suitability Analyzer
+              Safe Hardware Diagnostic & Workload Analyzer
             </p>
           </div>
         </div>
@@ -70,10 +63,10 @@ export const Header: React.FC<HeaderProps> = ({
           border: '1px solid var(--border-card)'
         }}>
           {[
-            { id: 'diagnostics', label: 'Diagnostics & Run', icon: <Cpu size={15} /> },
-            { id: 'workloads', label: 'Workloads & Matrix', icon: <ShieldCheck size={15} /> },
-            { id: 'manual', label: 'Manual Shop Checks', icon: <CheckSquare size={15} /> },
-            { id: 'reports', label: 'PDF Reports', icon: <FileText size={15} /> }
+            { id: 'downloads', label: 'Downloads & Setup', icon: <Download size={15} /> },
+            { id: 'viewer', label: 'Inspect Report', icon: <FileText size={15} /> },
+            { id: 'workloads', label: 'Workload Matrix', icon: <ShieldCheck size={15} /> },
+            { id: 'manual', label: 'Shop Checklist', icon: <CheckSquare size={15} /> }
           ].map(tab => {
             const isActive = activeTab === tab.id;
             return (
@@ -84,7 +77,7 @@ export const Header: React.FC<HeaderProps> = ({
                   background: isActive ? 'var(--primary)' : 'transparent',
                   color: isActive ? '#ffffff' : 'var(--text-muted)',
                   border: 'none',
-                  padding: '0.45rem 0.85rem',
+                  padding: '0.45rem 0.95rem',
                   borderRadius: '7px',
                   fontSize: '0.82rem',
                   fontWeight: 600,
@@ -102,93 +95,29 @@ export const Header: React.FC<HeaderProps> = ({
           })}
         </nav>
 
-        {/* Right Controls: Mode Toggle, Portable Tool Download & Theme Switch */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
-          {/* Portable .bat Download Button */}
-          <a
-            href="/LaptopCheck_Windows.bat"
-            download="LaptopCheck_Windows.bat"
+        {/* Right Controls: Quick Download Link & Theme Switch */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          
+          <button
+            onClick={() => setActiveTab('downloads')}
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: '0.4rem',
-              padding: '0.35rem 0.75rem',
+              padding: '0.45rem 0.85rem',
               borderRadius: '8px',
-              fontSize: '0.76rem',
+              fontSize: '0.78rem',
               fontWeight: 700,
-              textDecoration: 'none',
+              background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)',
               color: '#ffffff',
-              background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
-              boxShadow: '0 2px 8px rgba(2, 132, 199, 0.3)',
               border: 'none',
-              transition: 'transform 0.15s ease'
+              cursor: 'pointer',
+              boxShadow: '0 2px 10px var(--primary-glow)'
             }}
-            title="Download zero-install Windows hardware scanner to extract genuine BIOS, NVMe SMART & battery wear cycles"
           >
-            <Download size={13} color="#ffffff" />
-            <span>Windows .bat</span>
-          </a>
-
-          {/* Mode Switcher: Live This Device vs Reference Profiles */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.45rem',
-            background: isSimulation ? 'var(--status-caution-bg)' : 'var(--status-pass-bg)',
-            border: `1px solid ${isSimulation ? 'var(--status-caution-border)' : 'var(--status-pass-border)'}`,
-            padding: '0.3rem 0.65rem',
-            borderRadius: '9999px',
-            fontSize: '0.74rem',
-            fontWeight: 700
-          }}>
-            <span style={{
-              width: '7px',
-              height: '7px',
-              borderRadius: '50%',
-              background: isSimulation ? 'var(--status-caution)' : 'var(--status-pass)',
-              boxShadow: `0 0 6px ${isSimulation ? 'var(--status-caution)' : 'var(--status-pass)'}`
-            }} />
-            <span style={{ color: isSimulation ? 'var(--status-caution)' : 'var(--status-pass)' }}>
-              {isSimulation ? 'REFERENCE PRESETS' : 'THIS DEVICE (LIVE)'}
-            </span>
-            <button
-              onClick={() => setIsSimulation(!isSimulation)}
-              style={{
-                background: 'var(--bg-card)',
-                border: '1px solid var(--border-card)',
-                color: 'var(--text-main)',
-                padding: '0.15rem 0.45rem',
-                borderRadius: '5px',
-                fontSize: '0.68rem',
-                fontWeight: 600,
-                cursor: 'pointer'
-              }}
-              title={isSimulation ? "Switch to probing this machine's actual hardware" : "Switch to comparing against standard reference laptops"}
-            >
-              {isSimulation ? 'Detect This PC' : 'Compare Presets'}
-            </button>
-          </div>
-
-          {isSimulation && (
-            <select
-              value={simulationPreset}
-              onChange={(e) => setSimulationPreset(e.target.value)}
-              style={{
-                background: 'var(--bg-input)',
-                color: 'var(--text-main)',
-                border: '1px solid var(--border-card)',
-                padding: '0.35rem 0.55rem',
-                borderRadius: '7px',
-                fontSize: '0.76rem',
-                fontWeight: 500,
-                cursor: 'pointer'
-              }}
-            >
-              {simulationPresetsList.map(p => (
-                <option key={p.id} value={p.id}>{p.label}</option>
-              ))}
-            </select>
-          )}
+            <Download size={14} />
+            <span>Get LaptopCheck</span>
+          </button>
 
           {/* Theme Toggle Button */}
           <button
@@ -196,15 +125,28 @@ export const Header: React.FC<HeaderProps> = ({
             className="theme-toggle-btn"
             title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Theme`}
             aria-label="Toggle theme"
+            style={{
+              background: 'var(--bg-input)',
+              border: '1px solid var(--border-card)',
+              color: 'var(--text-main)',
+              padding: '0.45rem 0.8rem',
+              borderRadius: '8px',
+              fontSize: '0.78rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem'
+            }}
           >
             {theme === 'dark' ? (
               <>
-                <Sun size={15} color="#f59e0b" />
+                <Sun size={14} color="#f59e0b" />
                 <span>Light</span>
               </>
             ) : (
               <>
-                <Moon size={15} color="var(--primary)" />
+                <Moon size={14} color="var(--primary)" />
                 <span>Dark</span>
               </>
             )}

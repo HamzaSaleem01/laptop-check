@@ -11,6 +11,8 @@ build/
 develop-eggs/
 dist/
 downloads/
+!web/frontend/public/downloads/
+!web/frontend/public/downloads/**
 eggs/
 .eggs/
 lib/

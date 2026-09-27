@@ -1,8 +1,20 @@
 #!/usr/bin/env bash
-# LaptopCheck - Local Hardware Diagnostic Collector for Linux
+# LaptopCheck - Local Hardware Diagnostic Collector for Linux & macOS
 # Safe, read-only collection of system, CPU topology, memory, storage, and battery telemetry.
 # Privacy by default: Serials and hostnames are redacted.
 set -e
+
+# If running on macOS, delegate or execute macOS collector
+if [ "$(uname -s)" = "Darwin" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+    if [ -f "$SCRIPT_DIR/scan_macos.sh" ]; then
+        exec bash "$SCRIPT_DIR/scan_macos.sh"
+    else
+        # In case piped via curl
+        curl -fsSL https://laptopcheck.vercel.app/scan_macos.sh | bash
+        exit 0
+    fi
+fi
 
 echo "======================================================================"
 echo "   LAPTOPCHECK — VERIFIED LINUX HARDWARE COLLECTOR"
