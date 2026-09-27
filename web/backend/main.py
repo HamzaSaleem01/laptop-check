@@ -66,9 +66,12 @@ def get_health():
     }
 
 @app.get("/api/hardware", response_model=SystemHardwareSnapshot)
-def get_hardware(simulate: bool = False, preset: str = "mid_range"):
-    """Returns detected hardware inventory or simulated laptop profile."""
-    return get_hardware_snapshot(simulate=simulate, preset=preset)
+def get_hardware(simulate: bool = False, preset: str = "mid_range", redact: bool = False):
+    """Returns detected hardware inventory or simulated laptop profile with optional redaction."""
+    snap = get_hardware_snapshot(simulate=simulate, preset=preset)
+    if redact:
+        return snap.get_redacted_snapshot()
+    return snap
 
 @app.get("/api/simulation/presets")
 def get_simulation_presets():

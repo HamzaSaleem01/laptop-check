@@ -1,18 +1,52 @@
 export type StatusEnum = 'PASS' | 'CAUTION' | 'FAIL' | 'NOT AVAILABLE' | 'NOT TESTED' | 'SKIPPED';
 
+export type ProvenanceStatus =
+  | 'measured'
+  | 'reported'
+  | 'inferred'
+  | 'user_confirmed'
+  | 'unavailable'
+  | 'permission_denied'
+  | 'unsupported'
+  | 'conflict'
+  | 'simulated';
+
+export type ProvenanceConfidence = 'high' | 'medium' | 'low' | 'unavailable' | 'simulated';
+
+export interface FieldProvenance {
+  key: string;
+  value?: any;
+  unit?: string;
+  source: string;
+  method: string;
+  confidence: ProvenanceConfidence;
+  status: ProvenanceStatus;
+  observed_at: string;
+  limitations: string[];
+}
+
 export interface CPUInfo {
   model: string;
   manufacturer: string;
   architecture: string;
   cores_physical?: number;
   threads_logical?: number;
+  p_cores?: number;
+  e_cores?: number;
+  stepping?: string;
   base_freq_mhz?: number;
   max_freq_mhz?: number;
   current_freq_mhz?: number;
+  cache_l1d_kb?: number;
+  cache_l1i_kb?: number;
+  cache_l2_kb?: number;
+  cache_l3_kb?: number;
   instruction_sets: string[];
   virtualization: boolean;
   usage_percent?: number;
   temperature_c?: number;
+  tdp_w?: number;
+  governor?: string;
 }
 
 export interface RAMInfo {
@@ -23,6 +57,10 @@ export interface RAMInfo {
   speed_mhz?: number;
   channels: string;
   modules_count?: number;
+  is_soldered?: boolean;
+  slots_total?: number;
+  slots_used?: number;
+  upgradeable?: string;
   bandwidth_gb_s?: number;
 }
 
@@ -31,7 +69,9 @@ export interface GPUInfo {
   vendor: string;
   is_dedicated: boolean;
   vram_mb?: number;
+  shared_memory_mb?: number;
   driver_version?: string;
+  compute_apis?: string[];
   temperature_c?: number;
   utilization_pct?: number;
 }
@@ -40,12 +80,15 @@ export interface StorageDriveInfo {
   device: string;
   model: string;
   media_type: string;
+  transport?: string;
   capacity_gb: number;
   smart_status: string;
   health_pct?: number;
+  smart_wear_pct?: number;
   temperature_c?: number;
   read_speed_mb_s?: number;
   write_speed_mb_s?: number;
+  smart_limitations?: string[];
 }
 
 export interface BatteryInfo {
@@ -54,11 +97,15 @@ export interface BatteryInfo {
   full_charge_capacity_mwh?: number;
   current_capacity_mwh?: number;
   health_pct?: number;
+  wear_pct?: number;
   cycle_count?: number;
+  power_w?: number;
+  voltage_v?: number;
   category: string;
   is_charging?: boolean;
   ac_connected?: boolean;
   temperature_c?: number;
+  source_label?: string;
 }
 
 export interface OSInfo {
@@ -68,20 +115,27 @@ export interface OSInfo {
   architecture: string;
   kernel?: string;
   hostname: string;
+  serial_number?: string;
+  bios_version?: string;
+  bios_date?: string;
 }
 
 export interface SystemHardwareSnapshot {
+  schema_version?: string;
   timestamp: string;
   device_model: string;
   manufacturer: string;
   is_simulation: boolean;
   simulation_profile_name?: string;
+  is_redacted?: boolean;
+  redacted_fields?: string[];
   os: OSInfo;
   cpu: CPUInfo;
   ram: RAMInfo;
   gpus: GPUInfo[];
   storage: StorageDriveInfo[];
   battery: BatteryInfo;
+  provenance?: Record<string, FieldProvenance>;
 }
 
 export interface BenchmarkMetric {

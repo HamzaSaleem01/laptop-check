@@ -39,9 +39,13 @@ class HardwareProvider(ABC):
         """Returns (manufacturer, model_name)"""
         pass
 
+    def get_provenance_records(self) -> dict:
+        """Returns provenance dictionary for detected fields."""
+        return {}
+
     def get_full_snapshot(self) -> SystemHardwareSnapshot:
         mfg, model = self.get_system_model()
-        return SystemHardwareSnapshot(
+        snapshot = SystemHardwareSnapshot(
             device_model=model,
             manufacturer=mfg,
             is_simulation=False,
@@ -52,3 +56,5 @@ class HardwareProvider(ABC):
             storage=self.get_storage_info(),
             battery=self.get_battery_info()
         )
+        snapshot.provenance = self.get_provenance_records()
+        return snapshot

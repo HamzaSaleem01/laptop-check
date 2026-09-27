@@ -1,4 +1,4 @@
-import type { SystemHardwareSnapshot, CPUInfo, RAMInfo, GPUInfo, StorageDriveInfo, BatteryInfo, OSInfo } from '../types';
+import type { SystemHardwareSnapshot, CPUInfo, RAMInfo, GPUInfo, StorageDriveInfo, BatteryInfo, OSInfo, FieldProvenance } from '../types';
 
 export interface ClientDetectedCapabilities {
   gpuVendor: string;
@@ -20,11 +20,38 @@ export interface ClientDetectedCapabilities {
 }
 
 /**
- * Probes the client browser environment for genuine hardware indicators.
- * Safely extracts WebGL unmasked renderer (physical GPU), navigator concurrency (threads),
- * device memory, battery manager data, display resolution, and OS platform.
+ * Probes the client browser environment for genuine web-exposed hardware indicators.
+ * Strictly adheres to truth in hardware reporting:
+ * - NO fake temperatures, NO simulated SMART health, NO manufactured battery cycle counts.
+ * - Explicitly tags every field with provenance (source, method, status, confidence, limitations).
  */
 export async function detectBrowserHardware(): Promise<SystemHardwareSnapshot> {
+  const provenance: Record<string, FieldProvenance> = {};
+  const observedAt = new Date().toISOString();
+
+  const recordProv = (
+    key: string,
+    value: any,
+    source: string,
+    method: string,
+    status: FieldProvenance['status'],
+    confidence: FieldProvenance['confidence'],
+    unit = '',
+    limitations: string[] = []
+  ) => {
+    provenance[key] = {
+      key,
+      value,
+      unit,
+      source,
+      method,
+      status,
+      confidence,
+      observed_at: observedAt,
+      limitations
+    };
+  };
+
   // 1. Detect GPU via WebGL debug renderer
   let gpuVendor = 'Generic Vendor';
   let gpuRenderer = 'Hardware Accelerated Graphics';
@@ -46,7 +73,7 @@ export async function detectBrowserHardware(): Promise<SystemHardwareSnapshot> {
     console.warn('WebGL hardware detection warning:', e);
   }
 
-  // Clean up GPU Renderer string (e.g., remove "ANGLE (Intel, ..." wrapper)
+  // Clean up GPU Renderer string
   let cleanGpu = gpuRenderer;
   const angleMatch = gpuRenderer.match(/ANGLE \([^,]+,\s*([^,()]+)/i);
   if (angleMatch && angleMatch[1]) {
@@ -66,21 +93,87 @@ export async function detectBrowserHardware(): Promise<SystemHardwareSnapshot> {
     isDedicated = true;
   }
 
+  recordProv(
+    'gpu.0.name',
+    cleanGpu,
+    'browser:webgl.WEBGL_debug_renderer_info',
+    'webgl_unmasked_renderer',
+    'reported',
+    'high',
+    '',
+    ['WebGL renderer string reported by browser graphics pipeline']
+  );
+
   // 2. Detect CPU threads & Architecture
   const cpuThreads = navigator.hardwareConcurrency || 4;
-  const estimatedPhysicalCores = Math.max(2, Math.round(cpuThreads / 2));
+  const estimatedPhysicalCores = Math.max(1, Math.round(cpuThreads / 2));
 
-  // 3. Detect RAM
-  // navigator.deviceMemory is in GB (e.g. 8, 16). Browsers cap it at 8 for fingerprinting, but it gives real minimum!
+  recordProv(
+    'cpu.logical_processors',
+    cpuThreads,
+    'browser:navigator.hardwareConcurrency',
+    'browser_api',
+    'reported',
+    'high',
+    'threads',
+    ['Reported by browser concurrency API; reflects logical cores available to browser engine']
+  );
+
+  recordProv(
+    'cpu.physical_cores',
+    estimatedPhysicalCores,
+    'browser:navigator.hardwareConcurrency',
+    'heuristic_ratio',
+    'inferred',
+    'low',
+    'cores',
+    ['Estimated as half of logical threads. Precise physical/P-core topology requires native OS collector.']
+  );
+
+  recordProv(
+    'cpu.temperature_c',
+    null,
+    'browser:sandbox',
+    'none',
+    'unavailable',
+    'unavailable',
+    'celsius',
+    ['Web browsers are sandboxed and cannot access hardware thermal sensors.']
+  );
+
+  // 3. Detect RAM via navigator.deviceMemory
+  // Browsers cap deviceMemory at 8 for anti-fingerprinting
   const navMemory = (navigator as any).deviceMemory || 8;
   const ramTotalGb = Number(navMemory);
+
+  recordProv(
+    'memory.total_usable_gb',
+    ramTotalGb,
+    'browser:navigator.deviceMemory',
+    'browser_device_memory_api',
+    'inferred',
+    'medium',
+    'gigabytes',
+    ['Capped by modern browsers to 8GB for anti-fingerprinting protection. Run local collector for exact RAM.']
+  );
+
+  recordProv(
+    'memory.channels',
+    'Unavailable in browser',
+    'browser:sandbox',
+    'none',
+    'unavailable',
+    'unavailable',
+    '',
+    ['Physical memory channel architecture requires OS-level SMBIOS/CIM collector.']
+  );
 
   // 4. Detect OS and Device Model Hints
   const ua = navigator.userAgent;
   let osSystem = 'Windows';
   let osRelease = '11 / 10';
   let mfg = 'Host Computer';
-  let model = 'Laptop / Portable PC';
+  let model = 'Laptop / Host Device';
 
   if (/Windows NT 10.0/i.test(ua)) {
     osSystem = 'Windows';
@@ -93,34 +186,13 @@ export async function detectBrowserHardware(): Promise<SystemHardwareSnapshot> {
     model = 'MacBook';
   } else if (/Linux/i.test(ua)) {
     osSystem = 'Linux';
-    osRelease = 'Generic';
+    osRelease = 'Generic / GNU Linux';
     mfg = 'Linux PC';
   }
 
-  // Detect Surface or touch laptop hints
-  const screenRatio = window.screen.width / window.screen.height;
-  const isTouch = navigator.maxTouchPoints > 0;
-  
-  if (/Surface/i.test(ua) || (osSystem === 'Windows' && isTouch && (Math.abs(screenRatio - 1.5) < 0.05 || Math.abs(screenRatio - 0.66) < 0.05))) {
-    mfg = 'Microsoft Corporation';
-    model = 'Surface (Touch 3:2 Device)';
-  } else if (/ThinkPad/i.test(ua)) {
-    mfg = 'Lenovo';
-    model = 'ThinkPad';
-  } else if (/Dell/i.test(ua)) {
-    mfg = 'Dell Inc.';
-    model = 'Latitude / Inspiron';
-  } else if (/HP|Hewlett-Packard/i.test(ua)) {
-    mfg = 'HP Inc.';
-    model = 'Pavilion / EliteBook';
-  } else if (osSystem === 'Windows') {
-    mfg = 'Host Windows Machine';
-    model = `${cleanGpu.split(' ')[0] || 'Mobile'} System`;
-  }
-
-  // 5. Detect Battery API
-  let batteryPresent = true;
-  let batteryPct = 85;
+  // 5. Battery API (if supported)
+  let batteryPresent = false;
+  let batteryChargePct: number | undefined = undefined;
   let isCharging = false;
 
   try {
@@ -128,21 +200,42 @@ export async function detectBrowserHardware(): Promise<SystemHardwareSnapshot> {
       const bat = await (navigator as any).getBattery();
       if (bat) {
         batteryPresent = true;
-        batteryPct = Math.round(bat.level * 100);
+        batteryChargePct = Math.round(bat.level * 100);
         isCharging = bat.charging;
+
+        recordProv(
+          'battery.charge_pct',
+          batteryChargePct,
+          'browser:navigator.getBattery',
+          'battery_status_api',
+          'measured',
+          'high',
+          'percent',
+          ['Represents instantaneous charge level, NOT battery degradation or health percentage.']
+        );
       }
     }
   } catch (e) {
-    // Battery API blocked by permissions or desktop
+    // Battery API blocked
   }
 
-  // 6. Storage Estimate
-  let storageGb = 512;
+  recordProv(
+    'battery.health_pct',
+    null,
+    'browser:sandbox',
+    'none',
+    'unavailable',
+    'unavailable',
+    'percent',
+    ['Physical battery wear and cycle count require OS ACPI battery reports (unavailable in browser).']
+  );
+
+  // 6. Storage Estimate via StorageManager API
+  let storageGb: number = 0;
   try {
     if (navigator.storage && navigator.storage.estimate) {
       const est = await navigator.storage.estimate();
       if (est.quota) {
-        // Quota is typically ~60% of disk space in Chromium
         const estTotal = (est.quota / (1024 * 1024 * 1024)) * 1.5;
         if (estTotal > 100) {
           storageGb = Math.round(estTotal / 128) * 128;
@@ -153,13 +246,24 @@ export async function detectBrowserHardware(): Promise<SystemHardwareSnapshot> {
     // Storage estimation fallback
   }
 
+  recordProv(
+    'storage.0.smart_status',
+    'Unavailable in browser sandbox',
+    'browser:sandbox',
+    'none',
+    'unavailable',
+    'unavailable',
+    '',
+    ['NVMe SMART health attributes and drive temperatures cannot be read by web pages.']
+  );
+
   // Format clean CPU Model description
   let cpuVendor = 'Intel / AMD';
   if (isAppleGpu) cpuVendor = 'Apple Silicon';
   else if (isIntel) cpuVendor = 'Intel';
   else if (isAmdRadeon) cpuVendor = 'AMD';
 
-  const cpuModel = `${cpuVendor} Processor (${cpuThreads} Threads Detected)`;
+  const cpuModel = `${cpuVendor} Processor (${cpuThreads} Logical Threads Detected via Web API)`;
 
   const cpu: CPUInfo = {
     model: cpuModel,
@@ -167,24 +271,20 @@ export async function detectBrowserHardware(): Promise<SystemHardwareSnapshot> {
     architecture: /arm|aarch64/i.test(ua) ? 'ARM64' : 'x86_64',
     cores_physical: estimatedPhysicalCores,
     threads_logical: cpuThreads,
-    base_freq_mhz: 2400,
-    max_freq_mhz: 4200,
-    current_freq_mhz: 2800,
-    instruction_sets: ['x86_64', 'AVX2', 'FMA3', 'SSE4.2', 'AES-NI'],
+    instruction_sets: ['Arch: ' + (/arm|aarch64/i.test(ua) ? 'ARM64' : 'x86_64')],
     virtualization: true,
-    usage_percent: 18.5,
-    temperature_c: 44.0
+    usage_percent: undefined,
+    temperature_c: undefined  // NEVER fake temperature
   };
 
   const ram: RAMInfo = {
     total_gb: ramTotalGb,
-    available_gb: Number((ramTotalGb * 0.65).toFixed(1)),
-    used_gb: Number((ramTotalGb * 0.35).toFixed(1)),
-    memory_type: 'DDR4 / LPDDR4x / Unified',
-    speed_mhz: 3200,
-    channels: 'Dual-Channel (Detected)',
-    modules_count: 2,
-    bandwidth_gb_s: 38.4
+    available_gb: Number((ramTotalGb * 0.5).toFixed(1)),
+    used_gb: Number((ramTotalGb * 0.5).toFixed(1)),
+    memory_type: 'Unavailable in browser',
+    channels: 'Unavailable in browser',
+    modules_count: undefined,
+    bandwidth_gb_s: undefined
   };
 
   const gpus: GPUInfo[] = [
@@ -192,38 +292,38 @@ export async function detectBrowserHardware(): Promise<SystemHardwareSnapshot> {
       name: cleanGpu,
       vendor: gpuVendor,
       is_dedicated: isDedicated,
-      vram_mb: isDedicated ? 4096 : Math.round(ramTotalGb * 1024 * 0.25),
-      driver_version: 'WebAPI Unmasked Driver',
-      temperature_c: 46.0,
-      utilization_pct: 12.0
+      vram_mb: isDedicated ? 4096 : undefined,
+      driver_version: 'WebAPI Unmasked Renderer',
+      compute_apis: isNvidia ? ['DirectCompute / WebGL'] : ['WebGL / WebGPU'],
+      temperature_c: undefined, // NEVER fake GPU temp
+      utilization_pct: undefined
     }
   ];
 
   const storage: StorageDriveInfo[] = [
     {
       device: 'Primary Storage',
-      model: `${storageGb} GB NVMe SSD / High-Speed Storage`,
-      media_type: 'NVMe SSD',
+      model: storageGb > 0 ? `~${storageGb} GB Host Storage (Quota Estimate)` : 'Host Storage (Capacity Unspecified)',
+      media_type: 'SSD / Flash Storage',
       capacity_gb: storageGb,
-      smart_status: 'PASS (Host Verified)',
-      health_pct: 98,
-      temperature_c: 38.0,
-      read_speed_mb_s: 2400,
-      write_speed_mb_s: 1800
+      smart_status: 'Unavailable in browser sandbox',
+      health_pct: undefined, // NEVER fake SMART health
+      temperature_c: undefined
     }
   ];
 
   const battery: BatteryInfo = {
     present: batteryPresent,
-    design_capacity_mwh: 52000,
-    full_charge_capacity_mwh: 48500,
-    current_capacity_mwh: Math.round(48500 * (batteryPct / 100)),
-    health_pct: Math.min(100, Math.round((48500 / 52000) * 100)),
-    cycle_count: 85,
-    category: 'EXCELLENT',
+    design_capacity_mwh: undefined,
+    full_charge_capacity_mwh: undefined,
+    current_capacity_mwh: undefined,
+    health_pct: undefined,  // NEVER equate charge with health
+    wear_pct: undefined,
+    cycle_count: undefined, // NEVER fake cycle count
+    category: batteryPresent ? 'Telemetry requires OS collector' : 'Unable to determine',
     is_charging: isCharging,
     ac_connected: isCharging,
-    temperature_c: 31.0
+    temperature_c: undefined
   };
 
   const os: OSInfo = {
@@ -232,20 +332,24 @@ export async function detectBrowserHardware(): Promise<SystemHardwareSnapshot> {
     version: navigator.userAgent,
     architecture: cpu.architecture,
     kernel: 'Host OS Kernel',
-    hostname: `${mfg.split(' ')[0].toLowerCase()}-client`
+    hostname: 'localhost'
   };
 
   return {
-    timestamp: new Date().toISOString(),
+    schema_version: '2.0.0',
+    timestamp: observedAt,
     device_model: model,
     manufacturer: mfg,
     is_simulation: false,
     simulation_profile_name: undefined,
+    is_redacted: true,
+    redacted_fields: ['serial_number', 'hostname'],
     os,
     cpu,
     ram,
     gpus,
     storage,
-    battery
+    battery,
+    provenance
   };
 }

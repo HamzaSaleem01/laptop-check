@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Download, Terminal, Upload, Check, Copy, AlertTriangle, ShieldCheck } from 'lucide-react';
+import React from 'react';
+import { Download, Terminal, Upload, Shield, ShieldCheck, Lock, FileCode } from 'lucide-react';
 import type { SystemHardwareSnapshot } from '../types';
 
 interface HardwareScanBannerProps {
@@ -13,15 +13,6 @@ export const HardwareScanBanner: React.FC<HardwareScanBannerProps> = ({
   isImported,
   machineName,
 }) => {
-  const [copied, setCopied] = useState(false);
-  const psCommand = 'powershell -c "irm https://laptopcheck.vercel.app/scan.ps1 | iex"';
-
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(psCommand);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
-  };
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -29,7 +20,7 @@ export const HardwareScanBanner: React.FC<HardwareScanBannerProps> = ({
     reader.onload = (event) => {
       try {
         const json = JSON.parse(event.target?.result as string);
-        if (json && json.device_model) {
+        if (json && (json.device_model || json.cpu)) {
           onHardwareImported(json);
         } else {
           alert('Invalid hardware snapshot JSON file format.');
@@ -46,8 +37,8 @@ export const HardwareScanBanner: React.FC<HardwareScanBannerProps> = ({
       <div className="glass-panel" style={{
         padding: '1rem 1.5rem',
         marginBottom: '1.25rem',
-        background: 'rgba(16, 185, 129, 0.1)',
-        border: '1px solid rgba(16, 185, 129, 0.4)',
+        background: 'rgba(16, 185, 129, 0.08)',
+        border: '1px solid rgba(16, 185, 129, 0.35)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -58,10 +49,10 @@ export const HardwareScanBanner: React.FC<HardwareScanBannerProps> = ({
           <ShieldCheck size={22} color="#10b981" />
           <div>
             <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#10b981' }}>
-              100% GENUINE HARDWARE IMPORTED
+              VERIFIED OS & FIRMWARE TELEMETRY ACTIVE
             </div>
             <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              Viewing verified motherboard, SSD, CPU, and battery data for <b>{machineName || 'Host Laptop'}</b>.
+              Viewing native SMBIOS, CPU topology, storage, and battery metrics for <b>{machineName || 'Host Device'}</b>.
             </div>
           </div>
         </div>
@@ -88,74 +79,89 @@ export const HardwareScanBanner: React.FC<HardwareScanBannerProps> = ({
       background: 'linear-gradient(180deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.8) 100%)'
     }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.85rem', marginBottom: '1rem' }}>
-        <AlertTriangle size={22} color="#f59e0b" style={{ flexShrink: 0, marginTop: '2px' }} />
+        <Shield size={22} color="var(--primary)" style={{ flexShrink: 0, marginTop: '2px' }} />
         <div>
           <h3 style={{ fontSize: '0.96rem', fontWeight: 800, color: 'var(--text-main)', margin: '0 0 0.25rem 0' }}>
-            Want 100% Genuine Specs for THIS Specific Laptop?
+            Inspect Real Firmware, Hybrid Core Topology & Battery Health
           </h3>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0, lineHeight: 1.45 }}>
-            Web browsers are sandboxed for security — websites <b>cannot</b> access physical BIOS serials, NVMe SSD health, or battery cycle counts directly through JavaScript.
-            Run the instant scanner below on this machine to read <b>exact hardware</b> in 3 seconds:
+            Web browsers are sandboxed for security — JavaScript cannot inspect physical BIOS tables, NVMe SMART health, thermal sensors, or battery cycle counts.
+            Use our <b>inspectable, read-only standalone collectors</b> to read direct OS & firmware telemetry locally without admin rights:
           </p>
         </div>
       </div>
 
-      {/* 3 Instant Methods */}
+      {/* 3 Inspectable Methods */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
         gap: '0.85rem'
       }}>
-        {/* Method 1: 1-Liner PowerShell Command */}
+        {/* Method 1: Windows Collector */}
         <div style={{
           background: 'var(--bg-card)',
           border: '1px solid var(--border-card)',
           borderRadius: '10px',
-          padding: '0.85rem 1rem'
+          padding: '0.85rem 1rem',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.45rem', color: 'var(--primary)' }}>
-            <Terminal size={16} />
-            <span style={{ fontSize: '0.82rem', fontWeight: 700 }}>Option A: Instant Windows 1-Liner</span>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.45rem', color: 'var(--primary)' }}>
+              <Terminal size={16} />
+              <span style={{ fontSize: '0.82rem', fontWeight: 700 }}>Option A: Windows Native Collector</span>
+            </div>
+            <p style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginBottom: '0.65rem' }}>
+              Download our transparent PowerShell script or portable launcher. Open and inspect source before running:
+            </p>
           </div>
-          <p style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-            Open Windows <b>PowerShell</b> and paste this (reads exact model, SSD, battery & auto-opens here):
-          </p>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            background: 'var(--bg-app)',
-            borderRadius: '6px',
-            padding: '0.3rem 0.5rem',
-            border: '1px solid var(--border-card)'
-          }}>
-            <code style={{ fontSize: '0.72rem', color: 'var(--accent)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)' }}>
-              irm https://laptopcheck.vercel.app/scan.ps1 | iex
-            </code>
-            <button
-              onClick={copyToClipboard}
+
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <a
+              href="/scan.ps1"
+              download="scan.ps1"
               style={{
-                background: copied ? 'var(--status-pass)' : 'var(--primary)',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '4px',
-                padding: '0.25rem 0.55rem',
-                fontSize: '0.7rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
-                gap: '0.25rem',
-                marginLeft: '0.4rem'
+                gap: '0.35rem',
+                padding: '0.35rem 0.75rem',
+                borderRadius: '6px',
+                fontSize: '0.74rem',
+                fontWeight: 600,
+                color: 'var(--text-main)',
+                background: 'var(--bg-card-sub)',
+                border: '1px solid var(--border-card)',
+                textDecoration: 'none'
               }}
-              title="Copy to clipboard"
             >
-              {copied ? <Check size={12} /> : <Copy size={12} />}
-              <span>{copied ? 'Copied!' : 'Copy'}</span>
-            </button>
+              <FileCode size={13} color="var(--primary)" />
+              <span>Inspect scan.ps1</span>
+            </a>
+
+            <a
+              href="/LaptopCheck_Windows.bat"
+              download="LaptopCheck_Windows.bat"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                padding: '0.35rem 0.75rem',
+                borderRadius: '6px',
+                fontSize: '0.74rem',
+                fontWeight: 700,
+                color: '#fff',
+                background: 'var(--primary)',
+                textDecoration: 'none'
+              }}
+            >
+              <Download size={13} />
+              <span>Download .bat</span>
+            </a>
           </div>
         </div>
 
-        {/* Method 2: Portable .bat Download */}
+        {/* Method 2: Linux Collector */}
         <div style={{
           background: 'var(--bg-card)',
           border: '1px solid var(--border-card)',
@@ -168,33 +174,32 @@ export const HardwareScanBanner: React.FC<HardwareScanBannerProps> = ({
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.45rem', color: '#10b981' }}>
               <Download size={16} />
-              <span style={{ fontSize: '0.82rem', fontWeight: 700 }}>Option B: Zero-Install .bat Tool</span>
+              <span style={{ fontSize: '0.82rem', fontWeight: 700 }}>Option B: Linux Native Collector</span>
             </div>
             <p style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginBottom: '0.65rem' }}>
-              Download our standalone batch script, double click it on any shop or friend's laptop (no installation needed):
+              Standalone shell script for Ubuntu, Debian, Fedora, Arch. Reads <code>sysfs</code> and <code>lscpu</code> without root:
             </p>
           </div>
 
           <a
-            href="/LaptopCheck_Windows.bat"
-            download="LaptopCheck_Windows.bat"
+            href="/scan.sh"
+            download="scan.sh"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: '0.45rem',
-              padding: '0.45rem 1rem',
+              padding: '0.42rem 0.85rem',
               borderRadius: '7px',
-              fontSize: '0.78rem',
+              fontSize: '0.75rem',
               fontWeight: 700,
               color: '#ffffff',
               background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
-              textDecoration: 'none',
-              boxShadow: '0 2px 8px rgba(5, 150, 105, 0.3)'
+              textDecoration: 'none'
             }}
           >
-            <Download size={14} />
-            <span>Download LaptopCheck_Windows.bat</span>
+            <Download size={13} />
+            <span>Download scan.sh</span>
           </a>
         </div>
 
@@ -211,10 +216,10 @@ export const HardwareScanBanner: React.FC<HardwareScanBannerProps> = ({
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.45rem', color: 'var(--accent)' }}>
               <Upload size={16} />
-              <span style={{ fontSize: '0.82rem', fontWeight: 700 }}>Option C: Upload Saved Scan</span>
+              <span style={{ fontSize: '0.82rem', fontWeight: 700 }}>Option C: Upload JSON Report</span>
             </div>
             <p style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginBottom: '0.65rem' }}>
-              Already ran the scanner and saved <code>laptop_specs.json</code>? Upload it here to view the diagnostic dashboard:
+              Already generated <code>laptop_specs.json</code>? Upload it here for offline evaluation:
             </p>
           </div>
 
@@ -223,17 +228,17 @@ export const HardwareScanBanner: React.FC<HardwareScanBannerProps> = ({
             alignItems: 'center',
             justifyContent: 'center',
             gap: '0.45rem',
-            padding: '0.45rem 1rem',
+            padding: '0.42rem 0.85rem',
             borderRadius: '7px',
-            fontSize: '0.78rem',
+            fontSize: '0.75rem',
             fontWeight: 700,
             color: 'var(--text-main)',
-            background: 'var(--bg-card)',
+            background: 'var(--bg-card-sub)',
             border: '1px solid var(--border-card)',
             cursor: 'pointer'
           }}>
-            <Upload size={14} />
-            <span>Select laptop_specs.json</span>
+            <Upload size={13} />
+            <span>Select JSON File</span>
             <input
               type="file"
               accept=".json"
@@ -242,6 +247,26 @@ export const HardwareScanBanner: React.FC<HardwareScanBannerProps> = ({
             />
           </label>
         </div>
+      </div>
+
+      {/* Trust & Privacy Notice */}
+      <div style={{
+        marginTop: '0.85rem',
+        padding: '0.55rem 0.85rem',
+        borderRadius: '7px',
+        background: 'rgba(15, 23, 42, 0.4)',
+        border: '1px solid var(--border-card)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.5rem',
+        fontSize: '0.72rem',
+        color: 'var(--text-muted)'
+      }}>
+        <Lock size={14} color="var(--primary)" style={{ flexShrink: 0 }} />
+        <span>
+          <b>Safe & Private by Default:</b> All collector scripts run read-only with standard user rights (never requests administrator or root).
+          Serial numbers and hostnames are redacted by default. Zero automated background network uploads.
+        </span>
       </div>
     </div>
   );

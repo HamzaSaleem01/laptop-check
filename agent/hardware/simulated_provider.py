@@ -15,7 +15,8 @@ from typing import List, Tuple, Dict, Any
 from agent.hardware.base import HardwareProvider
 from agent.models import (
     CPUInfo, RAMInfo, GPUInfo, StorageDriveInfo, BatteryInfo, OSInfo,
-    SystemHardwareSnapshot, BatteryHealthCategory
+    SystemHardwareSnapshot, BatteryHealthCategory,
+    FieldProvenance, ProvenanceStatus, ProvenanceConfidence
 )
 
 SIMULATED_PRESETS: Dict[str, Dict[str, Any]] = {
@@ -432,11 +433,11 @@ class SimulatedHardwareProvider(HardwareProvider):
 
     def get_full_snapshot(self) -> SystemHardwareSnapshot:
         mfg, model = self.get_system_model()
-        return SystemHardwareSnapshot(
+        snap = SystemHardwareSnapshot(
             device_model=model,
             manufacturer=mfg,
             is_simulation=True,
-            simulation_profile_name=self.preset["label"],
+            simulation_profile_name=f"[SYNTHETIC DEMO] {self.preset['label']}",
             os=self.get_os_info(),
             cpu=self.get_cpu_info(),
             ram=self.get_ram_info(),
@@ -444,3 +445,38 @@ class SimulatedHardwareProvider(HardwareProvider):
             storage=self.get_storage_info(),
             battery=self.get_battery_info()
         )
+        # Populate provenance explicitly flagging synthetic origin
+        snap.add_provenance(
+            "system.model", model,
+            source="simulation:preset",
+            method="synthetic_generator",
+            status=ProvenanceStatus.SIMULATED,
+            confidence=ProvenanceConfidence.SIMULATED,
+            limitations=["Synthetic demonstration profile for offline reference & QA testing"]
+        )
+        snap.add_provenance(
+            "cpu.model", snap.cpu.model,
+            source="simulation:preset",
+            method="synthetic_generator",
+            status=ProvenanceStatus.SIMULATED,
+            confidence=ProvenanceConfidence.SIMULATED,
+            limitations=["Synthetic CPU configuration"]
+        )
+        snap.add_provenance(
+            "memory.total_usable_gb", snap.ram.total_gb,
+            source="simulation:preset",
+            method="synthetic_generator",
+            status=ProvenanceStatus.SIMULATED,
+            confidence=ProvenanceConfidence.SIMULATED,
+            unit="gigabytes"
+        )
+        if snap.battery.present:
+            snap.add_provenance(
+                "battery.health_pct", snap.battery.health_pct,
+                source="simulation:preset",
+                method="synthetic_generator",
+                status=ProvenanceStatus.SIMULATED,
+                confidence=ProvenanceConfidence.SIMULATED,
+                unit="percent"
+            )
+        return snap

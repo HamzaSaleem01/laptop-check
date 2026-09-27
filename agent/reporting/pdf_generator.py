@@ -161,15 +161,16 @@ def generate_pdf_report(report: DiagnosticReport, output_filepath: str) -> str:
     # 1. Simulation Mode Alert Banner (if applicable)
     if report.is_simulation:
         sim_data = [
-            [Paragraph("<b>[SIMULATION MODE]</b> Synthesized benchmark & telemetry metrics for validation.", 
+            [Paragraph("<b>[SYNTHETIC DEMONSTRATION EXAMPLE — NOT A REAL HARDWARE SCAN]</b><br/>"
+                       "<font size=7.5>This report was generated from a synthetic demonstration profile and does not reflect a live physical laptop inspection.</font>", 
                        ParagraphStyle('SimText', parent=tbl_cell_bold, textColor=colors.HexColor('#c2410c'), alignment=1))]
         ]
         t_sim = Table(sim_data, colWidths=[540])
         t_sim.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#ffedd5')),
-            ('BOX', (0,0), (-1,-1), 1, colors.HexColor('#ea580c')),
-            ('TOPPADDING', (0,0), (-1,-1), 4),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+            ('BOX', (0,0), (-1,-1), 1.2, colors.HexColor('#ea580c')),
+            ('TOPPADDING', (0,0), (-1,-1), 5),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 5),
             ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         ]))
         story.append(t_sim)
@@ -332,6 +333,55 @@ def generate_pdf_report(report: DiagnosticReport, output_filepath: str) -> str:
         ('VALIGN', (0,0), (-1,-1), 'TOP'),
     ]))
     story.append(t_hw)
+
+    # Hardware Provenance & Evidence Trail Card (Per Section 6 of Redesign Spec)
+    if hw.provenance:
+        story.append(Spacer(1, 6))
+        story.append(Paragraph("<b>Hardware Provenance & Evidence Trail</b>", h2_style))
+        prov_rows = [[
+            Paragraph("Metric / Key", tbl_hdr),
+            Paragraph("Observed Value", tbl_hdr),
+            Paragraph("Source & Method", tbl_hdr),
+            Paragraph("Status & Confidence", tbl_hdr)
+        ]]
+        # Display key provenance entries
+        key_priority = [
+            "cpu.model", "cpu.topology.hybrid", "cpu.physical_cores", "cpu.temperature_c",
+            "memory.total_usable_gb", "memory.channels", "storage.0.smart_status",
+            "battery.health_pct", "battery.cycle_count", "system.model"
+        ]
+        chosen_keys = [k for k in key_priority if k in hw.provenance]
+        # Append remaining keys if under 8 total
+        for k in hw.provenance:
+            if k not in chosen_keys and len(chosen_keys) < 8:
+                chosen_keys.append(k)
+
+        for pkey in chosen_keys:
+            pval = hw.provenance[pkey]
+            status_val = pval.status.value if hasattr(pval.status, 'value') else str(pval.status)
+            conf_val = pval.confidence.value if hasattr(pval.confidence, 'value') else str(pval.confidence)
+            st_color = "#15803d" if status_val in ["measured", "reported"] else ("#c2410c" if status_val in ["simulated"] else "#b45309")
+            
+            val_display = str(pval.value) if pval.value is not None else "Not available"
+            if pval.unit:
+                val_display += f" {pval.unit}"
+
+            prov_rows.append([
+                Paragraph(f"<b>{pkey}</b>", tbl_cell),
+                Paragraph(val_display, tbl_cell),
+                Paragraph(f"{pval.source}<br/><font size=7 color='#64748b'>{pval.method}</font>", tbl_cell),
+                Paragraph(f"<font color='{st_color}'><b>{status_val.upper()}</b></font><br/><font size=7 color='#64748b'>({conf_val})</font>", tbl_cell)
+            ])
+
+        t_prov = Table(prov_rows, colWidths=[120, 110, 190, 120])
+        t_prov.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f1f5f9')),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
+            ('TOPPADDING', (0,0), (-1,-1), 3),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ]))
+        story.append(t_prov)
 
     # PAGE 2: Detailed Benchmarks & Thermal Curve
     story.append(PageBreak())
