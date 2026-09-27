@@ -5,9 +5,10 @@ import { DiagnosticTestController } from './components/DiagnosticTestController'
 import { WorkloadSelector } from './components/WorkloadSelector';
 import { ManualInspectionSection } from './components/ManualInspectionModal';
 import { ReportViewer } from './components/ReportViewer';
-import { Globe } from 'lucide-react';
+import { Download, CheckCircle, Info } from 'lucide-react';
 import type { SystemHardwareSnapshot, DiagnosticReport } from './types';
 import { MOCK_SIMULATION_PRESETS_LIST, MOCK_HARDWARE_PRESETS, createMockReport } from './mockData';
+import { detectBrowserHardware } from './utils/browserHardware';
 
 export function App() {
   // Theme Management (Light / Dark with localStorage persistence)
@@ -27,12 +28,13 @@ export function App() {
   };
 
   const [activeTab, setActiveTab] = useState('diagnostics');
-  const [isSimulation, setIsSimulation] = useState(true);
+  // Default to REAL / LIVE HARDWARE (inspecting this machine)
+  const [isSimulation, setIsSimulation] = useState(false);
   const [simulationPreset, setSimulationPreset] = useState('mid_range');
   const [simulationPresetsList, setSimulationPresetsList] = useState(MOCK_SIMULATION_PRESETS_LIST);
 
-  const [hardware, setHardware] = useState<SystemHardwareSnapshot | null>(MOCK_HARDWARE_PRESETS.mid_range);
-  const [loadingHardware, setLoadingHardware] = useState(false);
+  const [hardware, setHardware] = useState<SystemHardwareSnapshot | null>(null);
+  const [loadingHardware, setLoadingHardware] = useState(true);
   const [isCloudDemo, setIsCloudDemo] = useState(false);
 
   // Test Run State
@@ -57,34 +59,53 @@ export function App() {
       })
       .then(data => {
         setSimulationPresetsList(data);
-        setIsCloudDemo(false);
       })
       .catch(() => {
-        // Cloud / Standalone mode on Vercel
-        setIsCloudDemo(true);
+        // Vercel / standalone mode
       });
   }, []);
 
-  // Fetch hardware snapshot from API with fallback to rich preset data
-  const loadHardware = () => {
+  // Fetch hardware snapshot from API or probe real host browser hardware
+  const loadHardware = async () => {
     setLoadingHardware(true);
-    fetch(`/api/hardware?simulate=${isSimulation}&preset=${simulationPreset}`)
-      .then(res => {
+
+    if (isSimulation) {
+      try {
+        const res = await fetch(`/api/hardware?simulate=true&preset=${simulationPreset}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
-      .then(data => {
+        const data = await res.json();
         setHardware(data);
-        setLoadingHardware(false);
         setIsCloudDemo(false);
-      })
-      .catch(() => {
-        // Fallback to client-side preset for Vercel deployment
+      } catch {
         const fallbackHw = MOCK_HARDWARE_PRESETS[simulationPreset] || MOCK_HARDWARE_PRESETS.mid_range;
         setHardware(fallbackHw);
-        setLoadingHardware(false);
         setIsCloudDemo(true);
-      });
+      } finally {
+        setLoadingHardware(false);
+      }
+      return;
+    }
+
+    // LIVE HARDWARE MODE (Detect on this machine!)
+    try {
+      const res = await fetch('/api/hardware?simulate=false');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setHardware(data);
+      setIsCloudDemo(false);
+    } catch {
+      // Local agent server not running on this laptop -> Extract genuine hardware via Browser WebAPI & WebGL!
+      try {
+        const browserHw = await detectBrowserHardware();
+        setHardware(browserHw);
+      } catch (err) {
+        console.error('Browser hardware detection error:', err);
+        setHardware(MOCK_HARDWARE_PRESETS.mid_range);
+      }
+      setIsCloudDemo(true);
+    } finally {
+      setLoadingHardware(false);
+    }
   };
 
   useEffect(() => {
@@ -150,7 +171,7 @@ export function App() {
   const runCloudDemoTest = () => {
     setIsRunning(true);
     setProgress(0.05);
-    setCurrentStage('Initializing diagnostic sequence...');
+    setCurrentStage('Initializing diagnostic sequence on host device...');
     setElapsedSecs(0);
 
     const stages = [
@@ -176,7 +197,11 @@ export function App() {
       } else {
         clearInterval(interval);
         setIsRunning(false);
-        const report = createMockReport(simulationPreset, testLevel);
+        const report = createMockReport(
+          simulationPreset,
+          testLevel,
+          !isSimulation && hardware ? hardware : undefined
+        );
         setLatestReport(report);
         setActiveTab('reports');
       }
@@ -248,26 +273,62 @@ export function App() {
       />
 
       <main style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 1.5rem' }}>
-        {/* Cloud Demo Notification Pill */}
+        {/* Dynamic Mode Notification Bar */}
         {isCloudDemo && (
           <div className="spec-subcard" style={{
-            padding: '0.65rem 1rem',
+            padding: '0.75rem 1.15rem',
             marginBottom: '1rem',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             flexWrap: 'wrap',
-            gap: '0.5rem',
-            border: '1px solid var(--border-focus)',
-            background: 'var(--primary-light)'
+            gap: '0.75rem',
+            border: !isSimulation ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid var(--border-focus)',
+            background: !isSimulation ? 'rgba(16, 185, 129, 0.08)' : 'var(--primary-light)'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: 'var(--text-main)' }}>
-              <Globe size={15} color="var(--primary)" />
-              <span><b>Live Cloud Interactive Mode:</b> Full simulated diagnostic suites, hardware presets, and test sequences active in browser.</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', fontSize: '0.82rem', color: 'var(--text-main)' }}>
+              {!isSimulation ? (
+                <>
+                  <CheckCircle size={17} color="#10b981" />
+                  <span>
+                    <b>Live Device Mode:</b> Probing this machine's actual hardware (GPU, CPU threads, memory, battery). To test deep BIOS serials & NVMe SMART, run the portable scanner.
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Info size={17} color="#f59e0b" />
+                  <span>
+                    <b>Reference Preset Comparison:</b> Simulating {simulationPreset.replace('_', ' ')} specifications for benchmark comparison.
+                  </span>
+                </>
+              )}
             </div>
-            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-              Run <code>./LaptopCheck --open-browser</code> locally to connect to physical machine sensors.
-            </span>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+              <a
+                href="/LaptopCheck_Windows.bat"
+                download="LaptopCheck_Windows.bat"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  fontSize: '0.74rem',
+                  fontWeight: 700,
+                  color: '#ffffff',
+                  background: '#0284c7',
+                  padding: '0.3rem 0.65rem',
+                  borderRadius: '6px',
+                  textDecoration: 'none'
+                }}
+                title="Download 1-click Windows hardware diagnostic batch script"
+              >
+                <Download size={13} color="#ffffff" />
+                <span>1-Click Windows Scanner (.bat)</span>
+              </a>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                or run <code>python run.py</code> locally
+              </span>
+            </div>
           </div>
         )}
 

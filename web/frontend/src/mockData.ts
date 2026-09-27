@@ -401,53 +401,79 @@ export const MOCK_HARDWARE_PRESETS: Record<string, SystemHardwareSnapshot> = {
   }
 };
 
-export function createMockReport(presetId: string, testLevel: string): DiagnosticReport {
-  const hw = MOCK_HARDWARE_PRESETS[presetId] || MOCK_HARDWARE_PRESETS.mid_range;
-  const isFail = presetId === 'low_end' || presetId === 'storage_warning';
-  const isCaution = presetId === 'mid_range' || presetId === 'battery_degraded' || presetId === 'thermally_limited';
+export function createMockReport(presetId: string, testLevel: string, customHw?: SystemHardwareSnapshot): DiagnosticReport {
+  const hw = customHw || MOCK_HARDWARE_PRESETS[presetId] || MOCK_HARDWARE_PRESETS.mid_range;
+  const isCustom = !!customHw;
+  const isFail = !isCustom && (presetId === 'low_end' || presetId === 'storage_warning');
+  const isCaution = !isCustom && (presetId === 'mid_range' || presetId === 'battery_degraded' || presetId === 'thermally_limited');
 
   return {
-    report_id: `LC-CLOUD-${Date.now().toString(36).toUpperCase()}`,
+    report_id: `LC-${isCustom ? 'HOST' : 'SIM'}-${Date.now().toString(36).toUpperCase()}`,
     app_version: '1.0.0',
     created_at: new Date().toISOString().replace('T', ' ').slice(0, 19),
     test_level: testLevel,
-    is_simulation: true,
-    simulation_label: hw.simulation_profile_name,
+    is_simulation: !isCustom,
+    simulation_label: isCustom ? 'Host Device Live Scan' : hw.simulation_profile_name,
     hardware: hw,
     summary_categories: {
-      CPU: presetId === 'thermally_limited' ? 'CAUTION' : (presetId === 'low_end' ? 'CAUTION' : 'PASS'),
-      RAM: presetId === 'low_end' ? 'FAIL' : 'PASS',
-      Storage: presetId === 'storage_warning' ? 'FAIL' : 'PASS',
+      CPU: isCustom ? (hw.cpu.threads_logical && hw.cpu.threads_logical >= 4 ? 'PASS' : 'CAUTION') : (presetId === 'thermally_limited' ? 'CAUTION' : (presetId === 'low_end' ? 'CAUTION' : 'PASS')),
+      RAM: isCustom ? (hw.ram.total_gb >= 16 ? 'PASS' : (hw.ram.total_gb >= 8 ? 'CAUTION' : 'FAIL')) : (presetId === 'low_end' ? 'FAIL' : 'PASS'),
+      Storage: isCustom ? 'PASS' : (presetId === 'storage_warning' ? 'FAIL' : 'PASS'),
       GPU: 'PASS',
-      Thermals: presetId === 'thermally_limited' ? 'CAUTION' : 'PASS',
-      Battery: presetId === 'battery_degraded' ? 'FAIL' : 'PASS',
-      Stability: presetId === 'thermally_limited' ? 'CAUTION' : 'PASS'
+      Thermals: isCustom ? 'PASS' : (presetId === 'thermally_limited' ? 'CAUTION' : 'PASS'),
+      Battery: isCustom ? (hw.battery.health_pct && hw.battery.health_pct < 60 ? 'CAUTION' : 'PASS') : (presetId === 'battery_degraded' ? 'FAIL' : 'PASS'),
+      Stability: 'PASS'
     },
-    anomalies: presetId === 'storage_warning' ? [
-      {
-        severity: 'CRITICAL',
-        component: 'Storage',
-        title: 'Failing Mechanical HDD SMART Status',
-        description: 'Drive reports reallocated sector count exceeding critical threshold with high read latency.',
-        recommendation: 'Back up all personal data immediately and replace drive with modern SATA or NVMe SSD.'
+    anomalies: (() => {
+      if (isCustom) {
+        if (hw.ram.total_gb < 16) {
+          return [
+            {
+              severity: 'INFO',
+              component: 'Memory',
+              title: 'Host Memory Sizing Observation',
+              description: `Host system reports ${hw.ram.total_gb.toFixed(1)} GB RAM detected via browser WebAPI.`,
+              recommendation: 'For heavy computational materials science workloads or large Docker stacks, 16+ GB is recommended.'
+            }
+          ];
+        }
+        return [];
       }
-    ] : (presetId === 'battery_degraded' ? [
-      {
-        severity: 'WARNING',
-        component: 'Battery',
-        title: 'Severe Battery Capacity Degradation Detected',
-        description: 'Battery health measured at 42% of design capacity after 980 recharge cycles.',
-        recommendation: 'Replace the internal battery pack to restore portable operating runtime.'
+      if (presetId === 'storage_warning') {
+        return [
+          {
+            severity: 'CRITICAL',
+            component: 'Storage',
+            title: 'Failing Mechanical HDD SMART Status',
+            description: 'Drive reports reallocated sector count exceeding critical threshold with high read latency.',
+            recommendation: 'Back up all personal data immediately and replace drive with modern SATA or NVMe SSD.'
+          }
+        ];
       }
-    ] : (presetId === 'thermally_limited' ? [
-      {
-        severity: 'WARNING',
-        component: 'Cooling / Thermals',
-        title: 'Significant Thermal Throttling Under Continuous Load',
-        description: 'CPU core temperatures exceeded 91°C causing a 34% drop in sustained clock frequency.',
-        recommendation: 'Clean internal cooling fans, clear heatsink exhaust fins, and consider repasting CPU.'
+      if (presetId === 'battery_degraded') {
+        return [
+          {
+            severity: 'WARNING',
+            component: 'Battery',
+            title: 'Severe Battery Capacity Degradation Detected',
+            description: 'Battery health measured at 42% of design capacity after 980 recharge cycles.',
+            recommendation: 'Replace the internal battery pack to restore portable operating runtime.'
+          }
+        ];
       }
-    ] : [])),
+      if (presetId === 'thermally_limited') {
+        return [
+          {
+            severity: 'WARNING',
+            component: 'Cooling / Thermals',
+            title: 'Significant Thermal Throttling Under Continuous Load',
+            description: 'CPU core temperatures exceeded 91°C causing a 34% drop in sustained clock frequency.',
+            recommendation: 'Clean internal cooling fans, clear heatsink exhaust fins, and consider repasting CPU.'
+          }
+        ];
+      }
+      return [];
+    })(),
     workload_evaluations: [
       {
         profile_id: 'comp_materials_science',

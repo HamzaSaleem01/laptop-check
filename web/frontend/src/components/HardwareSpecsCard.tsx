@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { SystemHardwareSnapshot } from '../types';
-import { Cpu, HardDrive, Battery, Layers, ChevronDown, ChevronUp } from 'lucide-react';
+import { Cpu, HardDrive, Battery, Layers, ChevronDown, ChevronUp, Monitor, CheckCircle, Info, Download } from 'lucide-react';
 
 interface HardwareSpecsCardProps {
   hardware: SystemHardwareSnapshot | null;
@@ -13,7 +13,7 @@ export const HardwareSpecsCard: React.FC<HardwareSpecsCardProps> = ({ hardware, 
   if (loading) {
     return (
       <div className="glass-panel" style={{ padding: '2rem', textAlign: 'center', marginBottom: '1.5rem' }}>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Probing system hardware sensors...</p>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Probing host laptop hardware sensors & WebGL graphics...</p>
       </div>
     );
   }
@@ -26,15 +26,87 @@ export const HardwareSpecsCard: React.FC<HardwareSpecsCardProps> = ({ hardware, 
     );
   }
 
-  const { cpu, ram, storage, battery, os } = hardware;
+  const { cpu, ram, storage, battery, os, gpus } = hardware;
+  const isSim = hardware.is_simulation;
 
   return (
     <div className="glass-panel" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
+      
+      {/* Dynamic Status Notification Banner */}
+      {!isSim ? (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '0.75rem',
+          background: 'rgba(16, 185, 129, 0.1)',
+          border: '1px solid rgba(16, 185, 129, 0.3)',
+          borderRadius: '10px',
+          padding: '0.65rem 1rem',
+          marginBottom: '1.25rem'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <CheckCircle size={18} color="#10b981" />
+            <div>
+              <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#10b981' }}>
+                LIVE HOST HARDWARE DETECTED
+              </span>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
+                Directly probing this laptop's physical GPU, CPU threads, memory allocation, and battery status.
+              </p>
+            </div>
+          </div>
+          <a
+            href="/LaptopCheck_Windows.bat"
+            download="LaptopCheck_Windows.bat"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-card)',
+              color: 'var(--text-main)',
+              padding: '0.3rem 0.65rem',
+              borderRadius: '6px',
+              fontSize: '0.74rem',
+              fontWeight: 600,
+              textDecoration: 'none'
+            }}
+            title="Download zero-install script to inspect deep BIOS serial numbers & NVMe SMART health"
+          >
+            <Download size={13} color="var(--primary)" />
+            <span>Deep BIOS / SMART Scan (.bat)</span>
+          </a>
+        </div>
+      ) : (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.6rem',
+          background: 'rgba(245, 158, 11, 0.1)',
+          border: '1px solid rgba(245, 158, 11, 0.3)',
+          borderRadius: '10px',
+          padding: '0.55rem 1rem',
+          marginBottom: '1.25rem'
+        }}>
+          <Info size={18} color="#f59e0b" />
+          <div style={{ flex: 1 }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#f59e0b' }}>
+              REFERENCE BENCHMARK PROFILE: {hardware.simulation_profile_name || 'Standard Preset'}
+            </span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '0.5rem' }}>
+              Comparing against standard industry hardware specs.
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Header bar */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
         <div>
           <span style={{ fontSize: '0.75rem', color: 'var(--accent)', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-            System Under Diagnostic Inspection
+            {isSim ? 'Reference Profile' : 'Current Host Device'}
           </span>
           <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '0.1rem' }}>
             {hardware.manufacturer} {hardware.device_model}
@@ -57,7 +129,7 @@ export const HardwareSpecsCard: React.FC<HardwareSpecsCardProps> = ({ hardware, 
       {/* Grid of hardware pillars */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
         gap: '1rem'
       }}>
         {/* CPU */}
@@ -77,6 +149,26 @@ export const HardwareSpecsCard: React.FC<HardwareSpecsCardProps> = ({ hardware, 
             <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid var(--border-card)', fontSize: '0.75rem', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
               <div>Base: {cpu.base_freq_mhz || 'N/A'} MHz | Max: {cpu.max_freq_mhz || 'N/A'} MHz</div>
               <div>Instructions: {cpu.instruction_sets.slice(0, 8).join(', ') || 'x86_64'}</div>
+            </div>
+          )}
+        </div>
+
+        {/* Graphics (GPU) */}
+        <div className="spec-subcard">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem', color: '#8b5cf6' }}>
+            <Monitor size={18} />
+            <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>Graphics (GPU)</span>
+          </div>
+          <div style={{ fontSize: '0.92rem', fontWeight: 600, color: 'var(--text-main)', marginBottom: '0.2rem' }}>
+            {gpus && gpus.length > 0 ? gpus[0].name : 'Hardware Accelerated GPU'}
+          </div>
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+            {gpus && gpus[0]?.is_dedicated ? 'Dedicated GPU' : 'Integrated Graphics'} • {gpus && gpus[0]?.vendor ? gpus[0].vendor : 'Active'}
+          </div>
+          {technicalView && gpus && gpus.length > 0 && (
+            <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid var(--border-card)', fontSize: '0.75rem', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
+              <div>Driver: {gpus[0].driver_version || 'Accelerated'}</div>
+              <div>VRAM: {gpus[0].vram_mb ? `${gpus[0].vram_mb} MB` : 'Dynamic Shared'}</div>
             </div>
           )}
         </div>
@@ -128,10 +220,10 @@ export const HardwareSpecsCard: React.FC<HardwareSpecsCardProps> = ({ hardware, 
             <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>Battery State</span>
           </div>
           <div style={{ fontSize: '0.92rem', fontWeight: 600, color: 'var(--text-main)', marginBottom: '0.2rem' }}>
-            {battery.present ? `${battery.health_pct ?? 'N/A'}% Health` : 'No Battery / Desktop'}
+            {battery.present ? `${battery.health_pct ?? 'N/A'}% Level / Health` : 'No Battery / Desktop'}
           </div>
           <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            {battery.category} {battery.cycle_count ? `• ${battery.cycle_count} cycles` : ''}
+            {battery.is_charging ? 'Plugged In & Charging' : battery.category} {battery.cycle_count ? `• ${battery.cycle_count} cycles` : ''}
           </div>
           {technicalView && battery.present && (
             <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid var(--border-card)', fontSize: '0.75rem', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>

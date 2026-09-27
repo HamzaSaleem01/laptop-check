@@ -1,5 +1,5 @@
 import React from 'react';
-import { Laptop, Cpu, ShieldCheck, FileText, CheckSquare, Sun, Moon } from 'lucide-react';
+import { Laptop, Cpu, ShieldCheck, FileText, CheckSquare, Sun, Moon, Download } from 'lucide-react';
 
 interface HeaderProps {
   activeTab: string;
@@ -102,18 +102,43 @@ export const Header: React.FC<HeaderProps> = ({
           })}
         </nav>
 
-        {/* Right Controls: Mode Toggle & Theme Switch */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-          {/* Mode Switcher: Real Hardware vs Simulation Mode */}
+        {/* Right Controls: Mode Toggle, Portable Tool Download & Theme Switch */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+          {/* Portable .bat Download Button */}
+          <a
+            href="/LaptopCheck_Windows.bat"
+            download="LaptopCheck_Windows.bat"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              padding: '0.35rem 0.75rem',
+              borderRadius: '8px',
+              fontSize: '0.76rem',
+              fontWeight: 700,
+              textDecoration: 'none',
+              color: '#ffffff',
+              background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+              boxShadow: '0 2px 8px rgba(2, 132, 199, 0.3)',
+              border: 'none',
+              transition: 'transform 0.15s ease'
+            }}
+            title="Download zero-install Windows hardware scanner to extract genuine BIOS, NVMe SMART & battery wear cycles"
+          >
+            <Download size={13} color="#ffffff" />
+            <span>Windows .bat</span>
+          </a>
+
+          {/* Mode Switcher: Live This Device vs Reference Profiles */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '0.5rem',
+            gap: '0.45rem',
             background: isSimulation ? 'var(--status-caution-bg)' : 'var(--status-pass-bg)',
             border: `1px solid ${isSimulation ? 'var(--status-caution-border)' : 'var(--status-pass-border)'}`,
             padding: '0.3rem 0.65rem',
             borderRadius: '9999px',
-            fontSize: '0.75rem',
+            fontSize: '0.74rem',
             fontWeight: 700
           }}>
             <span style={{
@@ -124,7 +149,7 @@ export const Header: React.FC<HeaderProps> = ({
               boxShadow: `0 0 6px ${isSimulation ? 'var(--status-caution)' : 'var(--status-pass)'}`
             }} />
             <span style={{ color: isSimulation ? 'var(--status-caution)' : 'var(--status-pass)' }}>
-              {isSimulation ? 'SIMULATION' : 'REAL HARDWARE'}
+              {isSimulation ? 'REFERENCE PRESETS' : 'THIS DEVICE (LIVE)'}
             </span>
             <button
               onClick={() => setIsSimulation(!isSimulation)}
@@ -134,12 +159,13 @@ export const Header: React.FC<HeaderProps> = ({
                 color: 'var(--text-main)',
                 padding: '0.15rem 0.45rem',
                 borderRadius: '5px',
-                fontSize: '0.7rem',
+                fontSize: '0.68rem',
                 fontWeight: 600,
                 cursor: 'pointer'
               }}
+              title={isSimulation ? "Switch to probing this machine's actual hardware" : "Switch to comparing against standard reference laptops"}
             >
-              Switch
+              {isSimulation ? 'Detect This PC' : 'Compare Presets'}
             </button>
           </div>
 
@@ -153,7 +179,7 @@ export const Header: React.FC<HeaderProps> = ({
                 border: '1px solid var(--border-card)',
                 padding: '0.35rem 0.55rem',
                 borderRadius: '7px',
-                fontSize: '0.78rem',
+                fontSize: '0.76rem',
                 fontWeight: 500,
                 cursor: 'pointer'
               }}
