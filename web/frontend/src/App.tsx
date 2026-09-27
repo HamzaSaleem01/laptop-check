@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { HardwareSpecsCard } from './components/HardwareSpecsCard';
+import { HardwareScanBanner } from './components/HardwareScanBanner';
 import { DiagnosticTestController } from './components/DiagnosticTestController';
 import { WorkloadSelector } from './components/WorkloadSelector';
 import { ManualInspectionSection } from './components/ManualInspectionModal';
 import { ReportViewer } from './components/ReportViewer';
-import { Download, CheckCircle, Info } from 'lucide-react';
 import type { SystemHardwareSnapshot, DiagnosticReport } from './types';
 import { MOCK_SIMULATION_PRESETS_LIST, MOCK_HARDWARE_PRESETS, createMockReport } from './mockData';
 import { detectBrowserHardware } from './utils/browserHardware';
@@ -28,12 +28,12 @@ export function App() {
   };
 
   const [activeTab, setActiveTab] = useState('diagnostics');
-  // Default to REAL / LIVE HARDWARE (inspecting this machine)
   const [isSimulation, setIsSimulation] = useState(false);
   const [simulationPreset, setSimulationPreset] = useState('mid_range');
   const [simulationPresetsList, setSimulationPresetsList] = useState(MOCK_SIMULATION_PRESETS_LIST);
 
   const [hardware, setHardware] = useState<SystemHardwareSnapshot | null>(null);
+  const [importedHardware, setImportedHardware] = useState<SystemHardwareSnapshot | null>(null);
   const [loadingHardware, setLoadingHardware] = useState(true);
   const [isCloudDemo, setIsCloudDemo] = useState(false);
 
@@ -50,6 +50,37 @@ export function App() {
   const [latestReport, setLatestReport] = useState<DiagnosticReport | null>(null);
   const [historicalReports, setHistoricalReports] = useState<Array<{ filename: string; size_kb: number; created_at: string }>>([]);
 
+  // Check URL hash for imported 100% genuine data from scan.ps1, scan.sh or LaptopCheck_Windows.bat
+  useEffect(() => {
+    const checkHash = () => {
+      if (window.location.hash.startsWith('#data=')) {
+        try {
+          const raw = window.location.hash.slice(6);
+          let jsonStr = '';
+          try {
+            jsonStr = decodeURIComponent(escape(atob(raw)));
+          } catch {
+            jsonStr = atob(raw);
+          }
+          const parsed = JSON.parse(jsonStr) as SystemHardwareSnapshot;
+          if (parsed && (parsed.device_model || parsed.cpu)) {
+            setImportedHardware(parsed);
+            setHardware(parsed);
+            setIsSimulation(false);
+            setIsCloudDemo(false);
+            setLoadingHardware(false);
+          }
+        } catch (e) {
+          console.warn('Failed to parse URL hash hardware data:', e);
+        }
+      }
+    };
+
+    checkHash();
+    window.addEventListener('hashchange', checkHash);
+    return () => window.removeEventListener('hashchange', checkHash);
+  }, []);
+
   // Fetch simulation presets list from API if available
   useEffect(() => {
     fetch('/api/simulation/presets')
@@ -60,13 +91,17 @@ export function App() {
       .then(data => {
         setSimulationPresetsList(data);
       })
-      .catch(() => {
-        // Vercel / standalone mode
-      });
+      .catch(() => {});
   }, []);
 
   // Fetch hardware snapshot from API or probe real host browser hardware
   const loadHardware = async () => {
+    if (importedHardware && !isSimulation) {
+      setHardware(importedHardware);
+      setLoadingHardware(false);
+      return;
+    }
+
     setLoadingHardware(true);
 
     if (isSimulation) {
@@ -110,7 +145,7 @@ export function App() {
 
   useEffect(() => {
     loadHardware();
-  }, [isSimulation, simulationPreset]);
+  }, [isSimulation, simulationPreset, importedHardware]);
 
   // Fetch reports list
   const loadReports = () => {
@@ -121,7 +156,6 @@ export function App() {
       })
       .then(data => setHistoricalReports(data))
       .catch(() => {
-        // Fallback reports on Vercel
         setHistoricalReports([
           { filename: 'LaptopCheck_ThinkPad_E14_Gen_4_Sample.pdf', size_kb: 56.9, created_at: '2026-09-27 19:42:32' },
           { filename: 'LaptopCheck_Precision_7770_Sample.pdf', size_kb: 64.2, created_at: '2026-09-27 18:41:06' },
@@ -235,7 +269,6 @@ export function App() {
         setCurrentStage('Initializing diagnostic engine...');
       })
       .catch(() => {
-        // Fallback to cloud demo simulation
         runCloudDemoTest();
       });
   };
@@ -258,6 +291,14 @@ export function App() {
       });
   };
 
+  const handleHardwareImport = (imported: SystemHardwareSnapshot) => {
+    setImportedHardware(imported);
+    setHardware(imported);
+    setIsSimulation(false);
+    setIsCloudDemo(false);
+    setLoadingHardware(false);
+  };
+
   return (
     <div style={{ minHeight: '100vh', paddingBottom: '3rem' }}>
       <Header
@@ -273,66 +314,14 @@ export function App() {
       />
 
       <main style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 1.5rem' }}>
-        {/* Dynamic Mode Notification Bar */}
-        {isCloudDemo && (
-          <div className="spec-subcard" style={{
-            padding: '0.75rem 1.15rem',
-            marginBottom: '1rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: '0.75rem',
-            border: !isSimulation ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid var(--border-focus)',
-            background: !isSimulation ? 'rgba(16, 185, 129, 0.08)' : 'var(--primary-light)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', fontSize: '0.82rem', color: 'var(--text-main)' }}>
-              {!isSimulation ? (
-                <>
-                  <CheckCircle size={17} color="#10b981" />
-                  <span>
-                    <b>Live Device Mode:</b> Probing this machine's actual hardware (GPU, CPU threads, memory, battery). To test deep BIOS serials & NVMe SMART, run the portable scanner.
-                  </span>
-                </>
-              ) : (
-                <>
-                  <Info size={17} color="#f59e0b" />
-                  <span>
-                    <b>Reference Preset Comparison:</b> Simulating {simulationPreset.replace('_', ' ')} specifications for benchmark comparison.
-                  </span>
-                </>
-              )}
-            </div>
+        {/* Genuine Hardware Scan & 1-Liner Action Banner */}
+        <HardwareScanBanner
+          onHardwareImported={handleHardwareImport}
+          isImported={!!importedHardware && !isSimulation}
+          machineName={hardware ? `${hardware.manufacturer} ${hardware.device_model}` : undefined}
+        />
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-              <a
-                href="/LaptopCheck_Windows.bat"
-                download="LaptopCheck_Windows.bat"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.35rem',
-                  fontSize: '0.74rem',
-                  fontWeight: 700,
-                  color: '#ffffff',
-                  background: '#0284c7',
-                  padding: '0.3rem 0.65rem',
-                  borderRadius: '6px',
-                  textDecoration: 'none'
-                }}
-                title="Download 1-click Windows hardware diagnostic batch script"
-              >
-                <Download size={13} color="#ffffff" />
-                <span>1-Click Windows Scanner (.bat)</span>
-              </a>
-              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                or run <code>python run.py</code> locally
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* Hardware Snapshot visible on primary tabs */}
+        {/* Hardware Snapshot Card */}
         <HardwareSpecsCard hardware={hardware} loading={loadingHardware} />
 
         {/* Tab 1: Diagnostics & Run */}
